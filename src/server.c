@@ -2,6 +2,7 @@
 #include <string.h>
 #include "server.h"
 #include "cJSON.h"
+#include "log_entry.h"
 
 struct mg_context *server_ctx = NULL;
 
@@ -79,7 +80,11 @@ int handle_log(struct mg_connection *conn, void *cbdata)
     return 400;
   }
 
-  printf("LOG: Level=%s message=%s\n", level->valuestring, message->valuestring);
+  log_entry entry;
+  strncpy(entry.level, level->valuestring, sizeof(entry.level));
+  strncpy(entry.message, message->valuestring, sizeof(entry.message));
+  entry.timestamp = time(NULL);
+  printf("LOG: Level=%s message=%s\n", entry.level, entry.message);
 
   cJSON_Delete(json);
   free(body);
