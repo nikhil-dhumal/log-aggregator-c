@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "server.h"
+#include "cJSON.h"
 
 struct mg_context *server_ctx = NULL;
 
@@ -12,13 +13,11 @@ static const char *server_options[] = {
 int handle_ping(struct mg_connection *conn, void *cbdata)
 {
   (void)cbdata;
-  const char *res = "{\"status\":\"ok\"}\n";
   mg_printf(conn,
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: application/json\r\n"
             "Connection: close\r\n\r\n"
-            "%s\n",
-            res);
+            "{\"status\":\"ok\"}\n");
   return 200;
 }
 
@@ -53,8 +52,36 @@ int handle_log(struct mg_connection *conn, void *cbdata)
   mg_read(conn, body, len);
   body[len] = '\0';
 
-  printf("Log received: %s\n", body);
+  cJSON *json = cJSON_Parse(body);
 
+  if (json == NULL)
+  {
+    mg_printf(conn,
+              "HTTP/1.1 400 Bad Request\r\n"
+              "Content-Type: application/json\r\n"
+              "Connection: close\r\n\r\n"
+              "{\"error\":\"Invalid JSON\"}\n");
+    return 400;
+  }
+
+  cJSON *level = cJSON_GetObjectItemCaseSensitive(json, "level");
+  cJSON *message = cJSON_GetObjectItemCaseSensitive(json, "message");
+
+  if (!cJSON_IsString(level) || !cJSON_IsString(message))
+  {
+    mg_printf(conn,
+              "HTTP/1.1 400 Bad Request\r\n"
+              "Content-Type: application/json\r\n"
+              "Connection: close\r\n\r\n"
+              "{\"error\":\"Fields 'level' and 'message' must be strings\"}\n");
+    cJSON_Delete(json);
+    free(body);
+    return 400;
+  }
+
+  printf("LOG: Level=%s message=%s\n", level->valuestring, message->valuestring);
+
+  cJSON_Delete(json);
   free(body);
 
   mg_printf(conn,
@@ -62,7 +89,6 @@ int handle_log(struct mg_connection *conn, void *cbdata)
             "Content-Type: application/json\r\n"
             "Connection: close\r\n\r\n"
             "{\"status\":\"accepted\"}\n");
-
   return 200;
 }
 
