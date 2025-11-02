@@ -5,6 +5,7 @@
 #include "worker.h"
 #include "queue.h"
 #include "log_entry.h"
+#include "storage.h"
 
 static pthread_t worker_thread;
 
@@ -21,7 +22,7 @@ static void *worker_loop(void *arg)
         {
             break;
         }
-        printf("[WORKER] %ld | %s | %s\n", entry.timestamp, entry.level, entry.message);
+        storage_write(&entry);
     }
 
     return NULL;
