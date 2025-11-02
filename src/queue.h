@@ -6,6 +6,7 @@
 void queue_init(void);
 int queue_push(log_entry *entry);
 int queue_pop(log_entry *out);
+void queue_shutdown(void);
 void queue_destroy(void);
 
 #endif

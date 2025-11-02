@@ -87,9 +87,19 @@ int handle_log(struct mg_connection *conn, void *cbdata)
     entry.level[sizeof(entry.level) - 1] = '\0';
     strncpy(entry.message, message->valuestring, sizeof(entry.message) - 1);
     entry.message[sizeof(entry.message) - 1] = '\0';
-
     entry.timestamp = time(NULL);
-    printf("LOG: Level=%s message=%s\n", entry.level, entry.message);
+
+    if (queue_push(&entry) != 0)
+    {
+        mg_printf(conn,
+                  "HTTP/1.1 503 Service Unavailable\r\n"
+                  "Content-Type: application/json\r\n"
+                  "Connection: close\r\n\r\n"
+                  "{\"error\":\"Server shutting down\"}\n");
+        cJSON_Delete(json);
+        free(body);
+        return 503;
+    }
 
     cJSON_Delete(json);
     free(body);
@@ -124,6 +134,7 @@ void stop_server(void)
         mg_stop(server_ctx);
         server_ctx = NULL;
     }
+    queue_shutdown();
     worker_stop();
     queue_destroy();
 }
