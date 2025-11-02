@@ -17,12 +17,8 @@ static void *worker_loop(void *arg)
     while (worker_running)
     {
         log_entry entry;
-
-        // TODO: pop from queue
-
-        // TODO: write to file or stdout
-
-        usleep(1000);
+        queue_pop(&entry);
+        printf("[WORKER] %ld | %s | %s\n", entry.timestamp, entry.level, entry.message);
     }
 
     return NULL;

@@ -87,9 +87,9 @@ int handle_log(struct mg_connection *conn, void *cbdata)
     entry.level[sizeof(entry.level) - 1] = '\0';
     strncpy(entry.message, message->valuestring, sizeof(entry.message) - 1);
     entry.message[sizeof(entry.message) - 1] = '\0';
-
     entry.timestamp = time(NULL);
-    printf("LOG: Level=%s message=%s\n", entry.level, entry.message);
+    
+    queue_push(&entry);
 
     cJSON_Delete(json);
     free(body);
