@@ -17,7 +17,10 @@ static void *worker_loop(void *arg)
     while (worker_running)
     {
         log_entry entry;
-        queue_pop(&entry);
+        if (queue_pop(&entry) != 0)
+        {
+            break;
+        }
         printf("[WORKER] %ld | %s | %s\n", entry.timestamp, entry.level, entry.message);
     }
 
