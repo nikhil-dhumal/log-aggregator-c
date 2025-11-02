@@ -5,6 +5,7 @@
 #include "log_entry.h"
 #include "queue.h"
 #include "worker.h"
+#include "storage.h"
 
 struct mg_context *server_ctx = NULL;
 
@@ -122,6 +123,10 @@ struct mg_context *start_server(void)
     }
     mg_set_request_handler(server_ctx, "/ping", handle_ping, NULL);
     mg_set_request_handler(server_ctx, "/log", handle_log, NULL);
+    if (storage_init("logs.txt") != 0)
+    {
+        return NULL;
+    }
     queue_init();
     worker_start();
     return server_ctx;
@@ -137,4 +142,5 @@ void stop_server(void)
     queue_shutdown();
     worker_stop();
     queue_destroy();
+    storage_close();
 }
