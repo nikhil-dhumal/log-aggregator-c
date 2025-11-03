@@ -145,14 +145,11 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
 
     log_entry *logs = malloc(limit * sizeof(log_entry));
 
-    int count = 0;
-    int cached = cache_get_last(limit, logs);
+    int count = cache_get_last(limit, logs);
 
-    if (cached < limit)
+    if (count < limit)
     {
-        int needed = limit - cached;
-        int from_storage = storage_read_last(needed, logs + cached);
-        count = cached + from_storage;
+        count = storage_read_last(limit, logs);
     }
 
     cJSON *root = cJSON_CreateObject();
