@@ -7,11 +7,12 @@
 #include "worker.h"
 #include "storage.h"
 
+#define DEFAULT_GET_LIMIT 10
+
 struct mg_context *server_ctx = NULL;
 
 static const char *server_options[] = {
     "listening_ports", "8080",
-    // TODO: add future options here (thread count, etc.)
     NULL};
 
 int handle_ping(struct mg_connection *conn, void *cbdata)
@@ -25,7 +26,7 @@ int handle_ping(struct mg_connection *conn, void *cbdata)
     return 200;
 }
 
-int handle_log(struct mg_connection *conn, void *cbdata)
+int handle_post_log(struct mg_connection *conn, void *cbdata)
 {
     (void)cbdata;
     const struct mg_request_info *req = mg_get_request_info(conn);
@@ -113,6 +114,66 @@ int handle_log(struct mg_connection *conn, void *cbdata)
     return 200;
 }
 
+int handle_get_log(struct mg_connection *conn, void *cbdata)
+{
+    (void)cbdata;
+    const struct mg_request_info *req = mg_get_request_info(conn);
+
+    if (strcmp(req->request_method, "GET") != 0)
+    {
+        mg_printf(conn,
+                  "HTTP/1.1 405 Method Not Allowed\r\n"
+                  "Content-Type: application/json\r\n"
+                  "Connection: close\r\n\r\n"
+                  "{\"error\":\"Use GET\"}\n");
+        return 405;
+    }
+
+    int limit = DEFAULT_GET_LIMIT;
+    char limit_str[16] = {0};
+
+    if (req->query_string != NULL && mg_get_var(req->query_string, strlen(req->query_string), "limit", limit_str, sizeof(limit_str)) > 0)
+    {
+        limit = atoi(limit_str);
+        if (limit <= 0)
+        {
+            limit = DEFAULT_GET_LIMIT;
+        }
+    }
+
+    log_entry *logs = malloc(limit * sizeof(log_entry));
+    int count = storage_read_last(limit, logs);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON *array = cJSON_CreateArray();
+
+    for (int i = 0; i < count; i++)
+    {
+        cJSON *item = cJSON_CreateObject();
+        cJSON_AddNumberToObject(item, "timestamp", logs[i].timestamp);
+        cJSON_AddStringToObject(item, "level", logs[i].level);
+        cJSON_AddStringToObject(item, "message", logs[i].message);
+        cJSON_AddItemToArray(array, item);
+    }
+
+    cJSON_AddItemToObject(root, "logs", array);
+    char *json_str = cJSON_PrintUnformatted(root);
+
+    free(logs);
+
+    mg_printf(conn,
+              "HTTP/1.1 200 OK\r\n"
+              "Content-Type: application/json\r\n"
+              "Connection: close\r\n\r\n"
+              "%s",
+              json_str);
+
+    cJSON_Delete(root);
+    free(json_str);
+
+    return 200;
+}
+
 struct mg_context *start_server(void)
 {
     server_ctx = mg_start(NULL, NULL, server_options);
@@ -122,7 +183,8 @@ struct mg_context *start_server(void)
         return NULL;
     }
     mg_set_request_handler(server_ctx, "/ping", handle_ping, NULL);
-    mg_set_request_handler(server_ctx, "/log", handle_log, NULL);
+    mg_set_request_handler(server_ctx, "/log", handle_post_log, NULL);
+    mg_set_request_handler(server_ctx, "/logs", handle_get_log, NULL);
     if (storage_init("logs.txt") != 0)
     {
         return NULL;
