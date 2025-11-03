@@ -6,6 +6,7 @@
 #include "queue.h"
 #include "log_entry.h"
 #include "storage.h"
+#include "cache.h"
 
 static pthread_t worker_thread;
 
@@ -23,6 +24,7 @@ static void *worker_loop(void *arg)
             break;
         }
         storage_write(&entry);
+        cache_insert(&entry);
     }
 
     return NULL;

@@ -6,8 +6,10 @@
 #include "queue.h"
 #include "worker.h"
 #include "storage.h"
+#include "cache.h"
 
 #define DEFAULT_GET_LIMIT 10
+#define DEFAULT_CACHE_SIZE 1000
 
 struct mg_context *server_ctx = NULL;
 
@@ -114,7 +116,7 @@ int handle_post_log(struct mg_connection *conn, void *cbdata)
     return 200;
 }
 
-int handle_get_log(struct mg_connection *conn, void *cbdata)
+int handle_get_logs(struct mg_connection *conn, void *cbdata)
 {
     (void)cbdata;
     const struct mg_request_info *req = mg_get_request_info(conn);
@@ -142,7 +144,16 @@ int handle_get_log(struct mg_connection *conn, void *cbdata)
     }
 
     log_entry *logs = malloc(limit * sizeof(log_entry));
-    int count = storage_read_last(limit, logs);
+
+    int count = 0;
+    int cached = cache_get_last(limit, logs);
+
+    if (cached < limit)
+    {
+        int needed = limit - cached;
+        int from_storage = storage_read_last(needed, logs + cached);
+        count = cached + from_storage;
+    }
 
     cJSON *root = cJSON_CreateObject();
     cJSON *array = cJSON_CreateArray();
@@ -184,7 +195,8 @@ struct mg_context *start_server(void)
     }
     mg_set_request_handler(server_ctx, "/ping", handle_ping, NULL);
     mg_set_request_handler(server_ctx, "/log", handle_post_log, NULL);
-    mg_set_request_handler(server_ctx, "/logs", handle_get_log, NULL);
+    mg_set_request_handler(server_ctx, "/logs", handle_get_logs, NULL);
+    cache_init(DEFAULT_CACHE_SIZE);
     if (storage_init("logs.txt") != 0)
     {
         return NULL;
@@ -205,4 +217,5 @@ void stop_server(void)
     worker_stop();
     queue_destroy();
     storage_close();
+    cache_destroy();
 }
