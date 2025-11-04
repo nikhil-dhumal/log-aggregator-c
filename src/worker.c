@@ -33,6 +33,7 @@ static void *worker_loop(void *arg)
 void worker_start(void)
 {
     worker_running = 1;
+    storage_init_writer();
     pthread_create(&worker_thread, NULL, worker_loop, NULL);
 }
 
