@@ -24,6 +24,8 @@ int storage_init(void)
         return -1;
     }
 
+    printf("Database connected\n");
+
     return 0;
 }
 
@@ -75,17 +77,18 @@ int storage_write(log_entry *entry)
     return 0;
 }
 
-int storage_read_last(int limit, log_entry *buffer)
+int storage_read_range(int limit, int offset, log_entry *buffer)
 {
-    char limit_str[6];
+    char limit_str[6], offset_str[6];
     snprintf(limit_str, sizeof(limit_str), "%d", limit);
+    snprintf(offset_str, sizeof(offset_str), "%d", offset);
 
-    const char *param_values[1] = {limit_str};
+    const char *param_values[2] = {limit_str, offset_str};
 
     PGresult *res = PQexecParams(
         pg_conn_read,
-        "SELECT timestamp, level, message FROM logs ORDER BY id DESC LIMIT $1",
-        1,
+        "SELECT timestamp, level, message FROM logs ORDER BY id DESC LIMIT $1 OFFSET $2",
+        2,
         NULL,
         param_values,
         NULL,
@@ -116,6 +119,14 @@ int storage_read_last(int limit, log_entry *buffer)
 
 void storage_close(void)
 {
-    PQfinish(pg_conn_read);
-    pg_conn_read = NULL;
+    if (pg_conn_read)
+    {
+        PQfinish(pg_conn_read);
+        pg_conn_read = NULL;
+    }
+    if (pg_conn_write)
+    {
+        PQfinish(pg_conn_write);
+        pg_conn_write = NULL;
+    }
 }

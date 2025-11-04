@@ -145,17 +145,20 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
 
     log_entry *logs = malloc(limit * sizeof(log_entry));
 
-    int count = cache_get_last(limit, logs);
+    int got_from_cache = cache_get_last(limit, logs);
+    int total = got_from_cache;
 
-    if (count < limit)
+    if (got_from_cache < limit)
     {
-        count = storage_read_last(limit, logs);
+        int need = limit - got_from_cache;
+        int got_from_db = storage_read_range(need, got_from_cache, logs + got_from_cache);
+        total += got_from_db;
     }
 
     cJSON *root = cJSON_CreateObject();
     cJSON *array = cJSON_CreateArray();
 
-    for (int i = 0; i < count; i++)
+    for (int i = 0; i < total; i++)
     {
         cJSON *item = cJSON_CreateObject();
         cJSON_AddNumberToObject(item, "timestamp", logs[i].timestamp);
