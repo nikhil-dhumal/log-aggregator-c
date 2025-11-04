@@ -26,6 +26,24 @@ int storage_init(void)
 
     printf("Database connected\n");
 
+    const char *create_table_query =
+        "CREATE TABLE IF NOT EXISTS logs("
+        "id SERIAL PRIMARY KEY,"
+        "timestampe BIGINT NOT NULL,"
+        "level TEXT NOT NULL,"
+        "message TEXT NOT NULL"
+        ");";
+
+    PGresult *res = PQexec(pg_conn_read, create_table_query);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    {
+        fprintf(stderr, "DB ERROR: %s\n", PQerrorMessage(pg_conn_read));
+        PQclear(res);
+        return -1;
+    }
+
+    PQclear(res);
     return 0;
 }
 
