@@ -19,12 +19,13 @@ int storage_init(const char *filename)
     return 0;
 }
 
-void storage_write(log_entry *entry)
+int storage_write(log_entry *entry)
 {
     pthread_mutex_lock(&lock);
     fprintf(storage_file, "%ld %s %s\n", entry->timestamp, entry->level, entry->message);
     fflush(storage_file);
     pthread_mutex_unlock(&lock);
+    return 0;
 }
 
 int storage_read_last(int limit, log_entry *buffer)

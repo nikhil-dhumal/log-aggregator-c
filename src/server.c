@@ -194,7 +194,7 @@ struct mg_context *start_server(void)
     mg_set_request_handler(server_ctx, "/log", handle_post_log, NULL);
     mg_set_request_handler(server_ctx, "/logs", handle_get_logs, NULL);
     cache_init(DEFAULT_CACHE_SIZE);
-    if (storage_init("logs.txt") != 0)
+    if (storage_init() != 0)
     {
         return NULL;
     }
