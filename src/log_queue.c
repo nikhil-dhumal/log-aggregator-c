@@ -1,9 +1,8 @@
-#include <pthread.h>
-#include <string.h>
 #include <stdio.h>
-#include "queue.h"
-
-#define QUEUE_CAPACITY 1024
+#include <string.h>
+#include <pthread.h>
+#include "config.h"
+#include "log_queue.h"
 
 static log_entry buffer[QUEUE_CAPACITY];
 static int head = 0;
@@ -15,12 +14,28 @@ static pthread_cond_t not_empty;
 static pthread_cond_t not_full;
 
 static int queue_running = 1;
+static int queue_initialized = 0;
 
-void queue_init(void)
+int queue_init(void)
 {
-    pthread_mutex_init(&lock, NULL);
-    pthread_cond_init(&not_empty, NULL);
-    pthread_cond_init(&not_full, NULL);
+    if (pthread_mutex_init(&lock, NULL) != 0)
+    {
+        return -1;
+    }
+    if (pthread_cond_init(&not_empty, NULL) != 0)
+    {
+        return -1;
+    }
+    if (pthread_cond_init(&not_full, NULL) != 0)
+    {
+        return -1;
+    }
+
+    head = tail = count = 0;
+    queue_running = 1;
+    queue_initialized = 1;
+
+    return 0;
 }
 
 int queue_push(log_entry *entry)
@@ -94,6 +109,11 @@ void queue_shutdown(void)
 
 void queue_destroy(void)
 {
+    if (!queue_initialized)
+    {
+        return;
+    }
+
     pthread_mutex_destroy(&lock);
     pthread_cond_destroy(&not_empty);
     pthread_cond_destroy(&not_full);

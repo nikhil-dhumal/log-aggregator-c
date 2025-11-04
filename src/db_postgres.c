@@ -1,45 +1,49 @@
+#include <libpq-fe.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <libpq-fe.h>
+#include <time.h>
+#include "db.h"
 #include "log_entry.h"
 
 static PGconn *pg_conn_read = NULL;
 static PGconn *pg_conn_write = NULL;
 
-int storage_init(void)
+int db_init(void)
 {
     const char *conn_info = getenv("LOGDB_CONN");
     if (conn_info == NULL)
     {
-        fprintf(stderr, "ERROR: Database connection failed\n");
+        fprintf(stderr, "[db] ERROR: Database connection failed\n");
         return -1;
     }
 
     pg_conn_read = PQconnectdb(conn_info);
     if (PQstatus(pg_conn_read) != CONNECTION_OK)
     {
-        fprintf(stderr, "DB ERROR: %s\n", PQerrorMessage(pg_conn_read));
+        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_read));
         PQfinish(pg_conn_read);
         return -1;
     }
 
-    printf("Database connected\n");
+    printf("[db] Connected\n");
 
     const char *create_table_query =
         "CREATE TABLE IF NOT EXISTS logs("
         "id SERIAL PRIMARY KEY,"
-        "timestampe BIGINT NOT NULL,"
-        "level TEXT NOT NULL,"
-        "message TEXT NOT NULL"
+        "timestamp BIGINT NOT NULL,"
+        "level VARCHAR(16) NOT NULL,"
+        "message VARCHAR(512) NOT NULL"
         ");";
 
     PGresult *res = PQexec(pg_conn_read, create_table_query);
 
-    if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
     {
-        fprintf(stderr, "DB ERROR: %s\n", PQerrorMessage(pg_conn_read));
+        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_read));
         PQclear(res);
+        PQfinish(pg_conn_read);
+        pg_conn_read = NULL;
         return -1;
     }
 
@@ -47,19 +51,19 @@ int storage_init(void)
     return 0;
 }
 
-int storage_init_writer(void)
+int db_init_writer(void)
 {
     const char *conn_info = getenv("LOGDB_CONN");
     if (conn_info == NULL)
     {
-        fprintf(stderr, "ERROR: Database connection failed\n");
+        fprintf(stderr, "[db] ERROR: Database connection failed\n");
         return -1;
     }
 
     pg_conn_write = PQconnectdb(conn_info);
     if (PQstatus(pg_conn_write) != CONNECTION_OK)
     {
-        fprintf(stderr, "DB ERROR: %s\n", PQerrorMessage(pg_conn_write));
+        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_write));
         PQfinish(pg_conn_write);
         return -1;
     }
@@ -67,7 +71,7 @@ int storage_init_writer(void)
     return 0;
 }
 
-int storage_write(log_entry *entry)
+int db_write(log_entry *entry)
 {
     char ts[32];
     snprintf(ts, sizeof(ts), "%ld", entry->timestamp);
@@ -84,9 +88,9 @@ int storage_write(log_entry *entry)
         NULL,
         0);
 
-    if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
     {
-        fprintf(stderr, "DB ERROR: %s\n", PQerrorMessage(pg_conn_write));
+        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_write));
         PQclear(res);
         return -1;
     }
@@ -95,7 +99,7 @@ int storage_write(log_entry *entry)
     return 0;
 }
 
-int storage_read_range(int limit, int offset, log_entry *buffer)
+int db_read_range(int limit, int offset, log_entry *buffer)
 {
     char limit_str[6], offset_str[6];
     snprintf(limit_str, sizeof(limit_str), "%d", limit);
@@ -113,9 +117,9 @@ int storage_read_range(int limit, int offset, log_entry *buffer)
         NULL,
         0);
 
-    if (PQresultStatus(res) != PGRES_TUPLES_OK)
+    if (!res || PQresultStatus(res) != PGRES_TUPLES_OK)
     {
-        fprintf(stderr, "DB ERROR: %s\n", PQerrorMessage(pg_conn_read));
+        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_read));
         PQclear(res);
         return 0;
     }
@@ -135,7 +139,7 @@ int storage_read_range(int limit, int offset, log_entry *buffer)
     return rows;
 }
 
-void storage_close(void)
+void db_close(void)
 {
     if (pg_conn_read)
     {

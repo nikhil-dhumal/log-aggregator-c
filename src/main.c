@@ -1,7 +1,8 @@
-#include <stdio.h>
 #include <signal.h>
+#include <stdio.h>
 #include <unistd.h>
-#include "server.h"
+#include "config.h"
+#include "http_server.h"
 
 volatile int server_running = 1;
 
@@ -20,7 +21,7 @@ int main(void)
         return 1;
     }
 
-    printf("Server running on http://localhost:8080\n");
+    printf("[server] Running at http://localhost:%s\n", SERVER_PORT);
 
     while (server_running) {
         sleep(1);

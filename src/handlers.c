@@ -1,21 +1,13 @@
 #include <stdlib.h>
 #include <string.h>
-#include "server.h"
 #include "cJSON.h"
-#include "log_entry.h"
-#include "queue.h"
-#include "worker.h"
-#include "storage.h"
 #include "cache.h"
+#include "db.h"
+#include "handlers.h"
+#include "log_entry.h"
+#include "log_queue.h"
 
 #define DEFAULT_GET_LIMIT 10
-#define DEFAULT_CACHE_SIZE 1000
-
-struct mg_context *server_ctx = NULL;
-
-static const char *server_options[] = {
-    "listening_ports", "8080",
-    NULL};
 
 int handle_ping(struct mg_connection *conn, void *cbdata)
 {
@@ -68,6 +60,7 @@ int handle_post_log(struct mg_connection *conn, void *cbdata)
                   "Content-Type: application/json\r\n"
                   "Connection: close\r\n\r\n"
                   "{\"error\":\"Invalid JSON\"}\n");
+        free(body);
         return 400;
     }
 
@@ -105,14 +98,13 @@ int handle_post_log(struct mg_connection *conn, void *cbdata)
         return 503;
     }
 
-    cJSON_Delete(json);
-    free(body);
-
     mg_printf(conn,
               "HTTP/1.1 200 OK\r\n"
               "Content-Type: application/json\r\n"
               "Connection: close\r\n\r\n"
               "{\"status\":\"accepted\"}\n");
+    cJSON_Delete(json);
+    free(body);
     return 200;
 }
 
@@ -145,13 +137,23 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
 
     log_entry *logs = malloc(limit * sizeof(log_entry));
 
+    if (!logs)
+    {
+        mg_printf(conn,
+                  "HTTP/1.1 500 Internal Server Error\r\n"
+                  "Content-Type: application/json\r\n"
+                  "Connection: close\r\n\r\n"
+                  "{\"error\":\"Out of memory\"}");
+        return 500;
+    }
+
     int got_from_cache = cache_get_last(limit, logs);
     int total = got_from_cache;
 
     if (got_from_cache < limit)
     {
         int need = limit - got_from_cache;
-        int got_from_db = storage_read_range(need, got_from_cache, logs + got_from_cache);
+        int got_from_db = db_read_range(need, got_from_cache, logs + got_from_cache);
         total += got_from_db;
     }
 
@@ -183,39 +185,4 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
     free(json_str);
 
     return 200;
-}
-
-struct mg_context *start_server(void)
-{
-    server_ctx = mg_start(NULL, NULL, server_options);
-    if (server_ctx == NULL)
-    {
-        fprintf(stderr, "ERROR: Failed to start CivetWeb server on port 8080\n");
-        return NULL;
-    }
-    mg_set_request_handler(server_ctx, "/ping", handle_ping, NULL);
-    mg_set_request_handler(server_ctx, "/log", handle_post_log, NULL);
-    mg_set_request_handler(server_ctx, "/logs", handle_get_logs, NULL);
-    cache_init(DEFAULT_CACHE_SIZE);
-    if (storage_init() != 0)
-    {
-        return NULL;
-    }
-    queue_init();
-    worker_start();
-    return server_ctx;
-}
-
-void stop_server(void)
-{
-    if (server_ctx != NULL)
-    {
-        mg_stop(server_ctx);
-        server_ctx = NULL;
-    }
-    queue_shutdown();
-    worker_stop();
-    queue_destroy();
-    storage_close();
-    cache_destroy();
 }

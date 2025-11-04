@@ -1,12 +1,12 @@
+#include <stdio.h>
 #include <pthread.h>
 #include <stdatomic.h>
-#include <stdio.h>
 #include <unistd.h>
-#include "worker.h"
-#include "queue.h"
-#include "log_entry.h"
-#include "storage.h"
 #include "cache.h"
+#include "db.h"
+#include "log_entry.h"
+#include "log_queue.h"
+#include "log_worker.h"
 
 static pthread_t worker_thread;
 
@@ -23,7 +23,7 @@ static void *worker_loop(void *arg)
         {
             break;
         }
-        storage_write(&entry);
+        db_write(&entry);
         cache_insert(&entry);
     }
 
@@ -33,8 +33,15 @@ static void *worker_loop(void *arg)
 void worker_start(void)
 {
     worker_running = 1;
-    storage_init_writer();
-    pthread_create(&worker_thread, NULL, worker_loop, NULL);
+    if (db_init_writer() != 0)
+    {
+        fprintf(stderr, "[worker] ERROR: DB writer init failed\n");
+        return;
+    }
+    if (pthread_create(&worker_thread, NULL, worker_loop, NULL) != 0)
+    {
+        fprintf(stderr, "[worker] ERROR: thread create failed\n");
+    }
 }
 
 void worker_stop(void)
