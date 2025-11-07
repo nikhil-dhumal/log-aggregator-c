@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include "cJSON.h"
@@ -9,14 +10,14 @@
 
 #define DEFAULT_GET_LIMIT 10
 
-int handle_ping(struct mg_connection *conn, void *cbdata)
+int handle_health(struct mg_connection *conn, void *cbdata)
 {
     (void)cbdata;
     mg_printf(conn,
               "HTTP/1.1 200 OK\r\n"
               "Content-Type: application/json\r\n"
               "Connection: close\r\n\r\n"
-              "{\"status\":\"ok\"}\n");
+              "{\"status\":\"healthy\"}\n");
     return 200;
 }
 
@@ -85,6 +86,11 @@ int handle_post_log(struct mg_connection *conn, void *cbdata)
     strncpy(entry.message, message->valuestring, sizeof(entry.message) - 1);
     entry.message[sizeof(entry.message) - 1] = '\0';
     entry.timestamp = time(NULL);
+    
+    for (char *p = entry.level; *p; p++)
+    {
+        *p = toupper(*p);
+    }
 
     if (queue_push(&entry) != 0)
     {
@@ -133,6 +139,26 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
         {
             limit = DEFAULT_GET_LIMIT;
         }
+        if (limit > 1000)
+        {
+            limit = 1000;
+        }
+    }
+
+    char level_buf[16] = {0};
+    char *level = NULL;
+
+    if (req->query_string != NULL && mg_get_var(req->query_string, strlen(req->query_string), "level", level_buf, sizeof(level_buf)) > 0)
+    {
+        level = level_buf;
+    }
+
+    if (level)
+    {
+        for (char *p = level; *p; p++)
+        {
+            *p = toupper(*p);
+        }
     }
 
     log_entry *logs = malloc(limit * sizeof(log_entry));
@@ -147,13 +173,13 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
         return 500;
     }
 
-    int got_from_cache = cache_get_last(limit, logs);
+    int got_from_cache = cache_get_last(limit, level, logs);
     int total = got_from_cache;
 
     if (got_from_cache < limit)
     {
         int need = limit - got_from_cache;
-        int got_from_db = db_read_range(need, got_from_cache, logs + got_from_cache);
+        int got_from_db = db_read_range(need, got_from_cache, level, logs + got_from_cache);
         total += got_from_db;
     }
 

@@ -64,7 +64,7 @@ void cache_insert(log_entry *entry)
     pthread_mutex_unlock(&lock);
 }
 
-int cache_get_last(int n, log_entry *buffer)
+int cache_get_last(int limit, const char *level, log_entry *buffer)
 {
     pthread_mutex_lock(&lock);
     if (count == 0)
@@ -72,16 +72,24 @@ int cache_get_last(int n, log_entry *buffer)
         pthread_mutex_unlock(&lock);
         return 0;
     }
-    if (n > count)
+    int matched = 0;
+    int scanned = 0;
+    int index = (tail - 1 + capacity) % capacity;
+    if (limit > count)
     {
-        n = count;
+        limit = count;
     }
-    int start = (tail - n + capacity) % capacity;
-    for (int i = 0; i < n; i++)
+    while (matched < limit && scanned < count)
     {
-        int index = (start + i) % capacity;
-        buffer[i] = cache[index];
+        if (level == NULL || strcmp(level, cache[index].level) == 0)
+        {
+            buffer[matched] = cache[index];
+            matched++;
+        }
+        index = (index - 1 + capacity) % capacity;
+        scanned++;
+
     }
     pthread_mutex_unlock(&lock);
-    return n;
+    return matched;
 }

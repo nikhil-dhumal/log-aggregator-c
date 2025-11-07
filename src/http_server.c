@@ -23,7 +23,7 @@ struct mg_context *start_server(void)
         fprintf(stderr, "[server] ERROR: Failed to start CivetWeb\n");
         return NULL;
     }
-    mg_set_request_handler(server_ctx, "/ping", handle_ping, NULL);
+    mg_set_request_handler(server_ctx, "/ping", handle_health, NULL);
     mg_set_request_handler(server_ctx, "/log", handle_post_log, NULL);
     mg_set_request_handler(server_ctx, "/logs", handle_get_logs, NULL);
     if (cache_init(CACHE_SIZE) != 0)
