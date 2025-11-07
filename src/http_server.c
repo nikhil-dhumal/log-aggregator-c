@@ -15,6 +15,29 @@ static const char *server_options[] = {
     "listening_ports", SERVER_PORT,
     NULL};
 
+int handle_logs(struct mg_connection *conn, void *cbdata)
+{
+    const char *method = mg_get_request_info(conn)->request_method;
+
+    if (strcmp(method, "POST") == 0)
+    {
+        return handle_post_log(conn, cbdata);
+    }
+    else if (strcmp(method, "GET") == 0)
+    {
+        return handle_get_logs(conn, cbdata);
+    }
+    else
+    {
+        mg_printf(conn,
+                  "HTTP/1.1 405 Method Not Allowed\r\n"
+                  "Content-Type: application/json\r\n"
+                  "Connection: close\r\n\r\n"
+                  "{\"error\":\"Method not allowed\"}\n");
+        return 405;
+    }
+}
+
 struct mg_context *start_server(void)
 {
     server_ctx = mg_start(NULL, NULL, server_options);
@@ -24,8 +47,7 @@ struct mg_context *start_server(void)
         return NULL;
     }
     mg_set_request_handler(server_ctx, "/ping", handle_health, NULL);
-    mg_set_request_handler(server_ctx, "/log", handle_post_log, NULL);
-    mg_set_request_handler(server_ctx, "/logs", handle_get_logs, NULL);
+    mg_set_request_handler(server_ctx, "/logs", handle_logs, NULL);
     if (cache_init(CACHE_SIZE) != 0)
     {
         fprintf(stderr, "[server] Cache init failed. Exiting.\n");

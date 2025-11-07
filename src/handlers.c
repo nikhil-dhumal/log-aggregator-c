@@ -25,17 +25,7 @@ int handle_post_log(struct mg_connection *conn, void *cbdata)
 {
     (void)cbdata;
     const struct mg_request_info *req = mg_get_request_info(conn);
-
-    if (strcmp(req->request_method, "POST") != 0)
-    {
-        mg_printf(conn,
-                  "HTTP/1.1 405 Method Not Allowed\r\n"
-                  "Content-Type: application/json\r\n"
-                  "Connection: close\r\n\r\n"
-                  "{\"error\":\"Use POST\"}\n");
-        return 405;
-    }
-
+    
     long long len = req->content_length;
 
     if (len <= 0)
@@ -86,7 +76,7 @@ int handle_post_log(struct mg_connection *conn, void *cbdata)
     strncpy(entry.message, message->valuestring, sizeof(entry.message) - 1);
     entry.message[sizeof(entry.message) - 1] = '\0';
     entry.timestamp = time(NULL);
-    
+
     for (char *p = entry.level; *p; p++)
     {
         *p = toupper(*p);
@@ -118,16 +108,6 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
 {
     (void)cbdata;
     const struct mg_request_info *req = mg_get_request_info(conn);
-
-    if (strcmp(req->request_method, "GET") != 0)
-    {
-        mg_printf(conn,
-                  "HTTP/1.1 405 Method Not Allowed\r\n"
-                  "Content-Type: application/json\r\n"
-                  "Connection: close\r\n\r\n"
-                  "{\"error\":\"Use GET\"}\n");
-        return 405;
-    }
 
     int limit = DEFAULT_GET_LIMIT;
     char limit_str[16] = {0};
