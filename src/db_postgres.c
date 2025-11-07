@@ -99,23 +99,40 @@ int db_write(log_entry *entry)
     return 0;
 }
 
-int db_read_range(int limit, int offset, log_entry *buffer)
+int db_read_range(int limit, int offset, const char *level, log_entry *buffer)
 {
     char limit_str[6], offset_str[6];
     snprintf(limit_str, sizeof(limit_str), "%d", limit);
     snprintf(offset_str, sizeof(offset_str), "%d", offset);
 
-    const char *param_values[2] = {limit_str, offset_str};
+    PGresult *res = NULL;
 
-    PGresult *res = PQexecParams(
-        pg_conn_read,
-        "SELECT timestamp, level, message FROM logs ORDER BY id DESC LIMIT $1 OFFSET $2",
-        2,
-        NULL,
-        param_values,
-        NULL,
-        NULL,
-        0);
+    if (level == NULL)
+    {
+        const char *param_values[2] = {limit_str, offset_str};
+        res = PQexecParams(
+            pg_conn_read,
+            "SELECT timestamp, level, message FROM logs ORDER BY id DESC LIMIT $1 OFFSET $2",
+            2,
+            NULL,
+            param_values,
+            NULL,
+            NULL,
+            0);
+    }
+    else
+    {
+        const char *param_values[3] = {level, limit_str, offset_str};
+        res = PQexecParams(
+            pg_conn_read,
+            "SELECT timestamp, level, message FROM logs WHERE level = $1 ORDER BY id DESC LIMIT $2 OFFSET $3",
+            3,
+            NULL,
+            param_values,
+            NULL,
+            NULL,
+            0);
+    }
 
     if (!res || PQresultStatus(res) != PGRES_TUPLES_OK)
     {
