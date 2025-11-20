@@ -39,8 +39,18 @@ int handle_post_log(struct mg_connection *conn, void *cbdata)
     }
 
     char *body = malloc(len + 1);
-    mg_read(conn, body, len);
-    body[len] = '\0';
+    int total = 0;
+
+    while (total < len)
+    {
+        int curr = mg_read(conn, body + total, len - total);
+        if (curr <= 0)
+        {
+            break;
+        }
+        total += curr;
+    }
+    body[total] = '\0';
 
     cJSON *json = cJSON_Parse(body);
 
