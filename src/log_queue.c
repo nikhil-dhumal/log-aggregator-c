@@ -42,12 +42,6 @@ int queue_push(log_entry *entry)
 {
     pthread_mutex_lock(&lock);
 
-    if (!queue_running)
-    {
-        pthread_mutex_unlock(&lock);
-        return -1;
-    }
-
     while (count == QUEUE_CAPACITY && queue_running)
     {
         pthread_cond_wait(&not_full, &lock);
@@ -65,18 +59,13 @@ int queue_push(log_entry *entry)
 
     pthread_cond_signal(&not_empty);
     pthread_mutex_unlock(&lock);
+
     return 0;
 }
 
 int queue_pop(log_entry *out)
 {
     pthread_mutex_lock(&lock);
-
-    if (!queue_running)
-    {
-        pthread_mutex_unlock(&lock);
-        return -1;
-    }
 
     while (count == 0 && queue_running)
     {
