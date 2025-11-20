@@ -71,22 +71,47 @@ int db_init_writer(void)
     return 0;
 }
 
-int db_write(log_entry *entry)
+int db_write(log_entry *entries, int count)
 {
-    char ts[32];
-    snprintf(ts, sizeof(ts), "%ld", entry->timestamp);
+    if (count <= 0)
+    {
+        return 0;
+    }
 
-    const char *param_values[3] = {ts, entry->level, entry->message};
+    char query[32786];
+    int pos;
 
-    PGresult *res = PQexecParams(
-        pg_conn_write,
-        "INSERT INTO logs (timestamp, level, message) VALUES ($1, $2, $3)",
-        3,
-        NULL,
-        param_values,
-        NULL,
-        NULL,
-        0);
+    pos = snprintf(query, sizeof(query), "INSERT INTO logs (timestamp, level, message) VALUES ");
+
+    for (int i = 0; i < count; i++)
+    {
+        char ts[32];
+        snprintf(ts, sizeof(ts), "%ld", entries[i].timestamp);
+
+        char escaped_msg[600];
+        int msg_pos = 0;
+
+        for (char *p = entries[i].message; *p && msg_pos < 590; p++)
+        {
+            if (*p == '\'')
+            {
+                escaped_msg[msg_pos++] = '\'';
+            }
+            escaped_msg[msg_pos++] = *p;
+        }
+        escaped_msg[msg_pos] = '\0';
+
+        pos += snprintf(
+            query + pos, 
+            sizeof(query) - pos, 
+            "(%s, '%s', '%s')%s", 
+            ts, 
+            entries[i].level, 
+            escaped_msg, 
+            (i == count - 1) ? "" : ",");
+    }
+
+    PGresult *res = PQexec(pg_conn_write, query);
 
     if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
     {
