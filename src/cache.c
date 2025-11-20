@@ -11,7 +11,7 @@ static int count;
 static int head;
 static int tail;
 
-static pthread_mutex_t lock;
+static pthread_rwlock_t lock;
 
 int cache_init(int size)
 {
@@ -27,7 +27,7 @@ int cache_init(int size)
     head = 0;
     tail = 0;
 
-    if (pthread_mutex_init(&lock, NULL) != 0)
+    if (pthread_rwlock_init(&lock, NULL) != 0)
     {
         fprintf(stderr, "[cache] ERROR: mutex init failed\n");
         free(cache);
@@ -45,12 +45,12 @@ void cache_destroy(void)
         free(cache);
     }
     cache = NULL;
-    pthread_mutex_destroy(&lock);
+    pthread_rwlock_destroy(&lock);
 }
 
 void cache_insert(log_entry *entry)
 {
-    pthread_mutex_lock(&lock);
+    pthread_rwlock_wrlock(&lock);
     cache[tail] = *entry;
     tail = (tail + 1) % capacity;
     if (count < capacity)
@@ -61,15 +61,15 @@ void cache_insert(log_entry *entry)
     {
         head = (head + 1) % capacity;
     }
-    pthread_mutex_unlock(&lock);
+    pthread_rwlock_unlock(&lock);
 }
 
 int cache_get_last(int limit, const char *level, log_entry *buffer)
 {
-    pthread_mutex_lock(&lock);
+    pthread_rwlock_rdlock(&lock);
     if (count == 0)
     {
-        pthread_mutex_unlock(&lock);
+        pthread_rwlock_unlock(&lock);
         return 0;
     }
     int matched = 0;
@@ -90,6 +90,6 @@ int cache_get_last(int limit, const char *level, log_entry *buffer)
         scanned++;
 
     }
-    pthread_mutex_unlock(&lock);
+    pthread_rwlock_unlock(&lock);
     return matched;
 }
