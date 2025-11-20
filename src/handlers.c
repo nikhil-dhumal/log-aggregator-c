@@ -3,12 +3,11 @@
 #include <string.h>
 #include "cJSON.h"
 #include "cache.h"
+#include "config.h"
 #include "db.h"
 #include "handlers.h"
 #include "log_entry.h"
 #include "log_queue.h"
-
-#define DEFAULT_GET_LIMIT 10
 
 int handle_health(struct mg_connection *conn, void *cbdata)
 {
