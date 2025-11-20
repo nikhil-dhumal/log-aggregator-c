@@ -4,5 +4,6 @@
 #define SERVER_PORT "8080"
 #define CACHE_SIZE 1000
 #define QUEUE_CAPACITY 1024
+#define WRITE_BATCH_SIZE 50
 
 #endif
