@@ -29,6 +29,7 @@ It implements a log aggregator that collects logs from multiple clients, stores 
 - GCC (C compiler)
 - PostgreSQL
 - `libpq` C library
+- `libcur` C library
 - `make`
 
 ### Setup PostgreSQL
