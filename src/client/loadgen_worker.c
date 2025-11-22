@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,7 +20,7 @@ static int logs_table_size = sizeof(logs_table) / sizeof(logs_table[0]);
 long long now_us()
 {
     struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
+    clock_gettime(CLOCK_MONOTONIC, &ts);
     return ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
 }
 
@@ -30,18 +31,16 @@ size_t discard_response(void *ptr, size_t size, size_t nmemb, void *userdata)
     return size * nmemb;
 }
 
-int send_post_request(const char *url)
+int send_post_request(CURL *curl, const char *url)
 {
-    CURL *curl = curl_easy_init();
+    int idx = rand() % logs_table_size;
+    char payload[512];
+    int n = snprintf(payload, sizeof(payload), "{\"level\":\"%s\",\"message\":\"%s\"}", logs_table[idx].level, logs_table[idx].message);
 
-    if (!curl)
+    if (n < 0 || n >= (int)sizeof(payload))
     {
         return -1;
     }
-
-    int idx = rand() % logs_table_size;
-    char payload[512];
-    snprintf(payload, sizeof(payload), "{\"level\":\"%s\",\"message\":\"%s\"}", logs_table[idx].level, logs_table[idx].message);
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
@@ -51,25 +50,20 @@ int send_post_request(const char *url)
 
     CURLcode res = curl_easy_perform(curl);
 
-    curl_easy_cleanup(curl);
-
     return (res == CURLE_OK) ? 0 : -1;
 }
 
-int send_get_request(const char *url)
+int send_get_request(CURL *curl, const char *url)
 {
-    CURL *curl = curl_easy_init();
-
-    if (!curl)
-    {
-        return -1;
-    }
-
     int idx = rand() % logs_table_size;
     int limit = 1 + rand() % 100;
     char get_url[512];
+    int n = snprintf(get_url, sizeof(get_url), "%s?limit=%d&level=%s", url, limit, logs_table[idx].level);
 
-    snprintf(get_url, sizeof(get_url), "%s?limit=%d&level=%s", url, limit, logs_table[idx].level);
+    if (n < 0 || n >= (int)sizeof(get_url))
+    {
+        return -1;
+    }
 
     curl_easy_setopt(curl, CURLOPT_URL, get_url);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
@@ -78,8 +72,6 @@ int send_get_request(const char *url)
 
     CURLcode res = curl_easy_perform(curl);
 
-    curl_easy_cleanup(curl);
-
     return (res == CURLE_OK) ? 0 : -1;
 }
 
@@ -87,12 +79,35 @@ void *loadgen_worker(void *args)
 {
     worker_ctx *ctx = (worker_ctx *)args;
 
+    unsigned int thread_seed = (unsigned int)time(NULL) ^ (unsigned int)(ctx->thread_id * 1103515245u);
+    srand(thread_seed);
+
     int success_count = 0;
     int failure_count = 0;
     long long total_response_time_us = 0;
+    long long min_response_time_us = LLONG_MAX;
+    long long max_response_time_us = 0;
     long long start_us = now_us();
     long long end_us = start_us + ctx->duration_sec * 1000000LL;
-    long long interval_us = 1000000LL / ctx->rate_per_thread;
+
+    CURL *curl = curl_easy_init();
+
+    if (!curl)
+    {
+        worker_metrics *m = malloc(sizeof(worker_metrics));
+        if (!m)
+        {
+            return NULL;
+        }
+        m->success_count = 0;
+        m->failure_count = 0;
+        m->total_response_time_us = 0;
+        m->min_response_time_us = 0;
+        m->max_response_time_us = 0;
+        return m;
+    }
+
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 
     while (now_us() < end_us)
     {
@@ -103,15 +118,15 @@ void *loadgen_worker(void *args)
 
         if (strcmp(ctx->workload, "write-heavy") == 0)
         {
-            res = (r < 0.8) ? send_post_request(ctx->url) : send_get_request(ctx->url);
+            res = (r < 0.8) ? send_post_request(curl, ctx->url) : send_get_request(curl, ctx->url);
         }
         else if (strcmp(ctx->workload, "read-heavy") == 0)
         {
-            res = (r < 0.8) ? send_get_request(ctx->url) : send_post_request(ctx->url);
+            res = (r < 0.8) ? send_get_request(curl, ctx->url) : send_post_request(curl, ctx->url);
         }
         else
         {
-            res = (r < 0.5) ? send_post_request(ctx->url) : send_get_request(ctx->url);
+            res = (r < 0.5) ? send_post_request(curl, ctx->url) : send_get_request(curl, ctx->url);
         }
 
         if (res == 0)
@@ -126,12 +141,23 @@ void *loadgen_worker(void *args)
         long long req_end = now_us();
         long long elapsed = req_end - req_start;
 
-        total_response_time_us += elapsed;
+        if (elapsed < 0)
+            elapsed = 0;
 
-        if (elapsed < interval_us)
+        total_response_time_us += elapsed;
+        if (elapsed > max_response_time_us)
         {
-            usleep(interval_us - elapsed);
+            max_response_time_us = elapsed;
         }
+        if (elapsed < min_response_time_us)
+        {
+            min_response_time_us = elapsed;
+        }
+    }
+
+    if (min_response_time_us == LLONG_MAX)
+    {
+        min_response_time_us = 0;
     }
 
     worker_metrics *metrics = malloc(sizeof(worker_metrics));
@@ -144,6 +170,8 @@ void *loadgen_worker(void *args)
     metrics->success_count = success_count;
     metrics->failure_count = failure_count;
     metrics->total_response_time_us = total_response_time_us;
+    metrics->max_response_time_us = max_response_time_us;
+    metrics->min_response_time_us = min_response_time_us;
 
     return metrics;
 }

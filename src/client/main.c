@@ -1,25 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <curl/curl.h>
 #include "loadgen.h"
 
 int main(int argc, char *argv[])
 {
+    curl_global_init(CURL_GLOBAL_ALL);
+
     loadgen_config cfg;
-    cfg.rate = 0;
     cfg.threads = 0;
     cfg.duration_sec = 0;
     cfg.workload = "mixed";
+    cfg.url = NULL;
+    cfg.csv_path = NULL;
 
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--url") == 0 && i + 1 < argc)
         {
             cfg.url = argv[++i];
-        } 
-        else if (strcmp(argv[i], "--rate") == 0 && i + 1 < argc)
-        {
-            cfg.rate = atoi(argv[++i]);
         }
         else if (strcmp(argv[i], "--threads") == 0 && i + 1 < argc)
         {
@@ -43,14 +43,14 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (!cfg.url || cfg.rate <= 0 || cfg.threads <= 0 || cfg.duration_sec <= 0 || !cfg.csv_path)
+    if (!cfg.url || cfg.threads <= 0 || cfg.duration_sec <= 0 || !cfg.csv_path)
     {
         fprintf(stderr, "[loadgen] ERROR: missing or invalid required arguments\n");
-        fprintf(stderr, "Usage: %s --url <url> --rate <rate> --thread <threads> --duration <seconds> --csv <file> [--workload <type>]\n", argv[0]);
+        fprintf(stderr, "Usage: %s --url <url> --thread <threads> --duration <seconds> --csv <file> [--workload <type>]\n", argv[0]);
         return 1;
     }
 
-    printf("[loadgen] Starting load test: %d req/sec, %d threads, %d seconds, workload = %s\n", cfg.rate, cfg.threads, cfg.duration_sec, cfg.workload);
+    printf("[loadgen] Starting load test: %d threads, %d seconds, workload = %s\n", cfg.threads, cfg.duration_sec, cfg.workload);
 
     int res = run_loadgen(&cfg);
 
