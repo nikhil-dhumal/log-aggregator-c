@@ -5,27 +5,52 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc < 6)
-    {
-        fprintf(stderr, "[loadgen] USAGE: %s <url> <rate> <threads> <duraction_sec> <results_csv>\n", argv[0]);
-        return 1;
-    }
-
     loadgen_config cfg;
+    cfg.rate = 0;
+    cfg.threads = 0;
+    cfg.duration_sec = 0;
+    cfg.workload = "mixed";
 
-    cfg.url = argv[1];
-    cfg.rate = atoi(argv[2]);
-    cfg.threads = atoi(argv[3]);
-    cfg.duration_sec = atoi(argv[4]);
-    cfg.csv_path = argv[5];
-
-    if (cfg.rate <= 0 || cfg.threads <= 0 || cfg.duration_sec <= 0)
+    for (int i = 1; i < argc; i++)
     {
-        fprintf(stderr, "[loadgen] ERROR: Invalid numeric arguments\n");
+        if (strcmp(argv[i], "--url") == 0 && i + 1 < argc)
+        {
+            cfg.url = argv[++i];
+        } 
+        else if (strcmp(argv[i], "--rate") == 0 && i + 1 < argc)
+        {
+            cfg.rate = atoi(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--threads") == 0 && i + 1 < argc)
+        {
+            cfg.threads = atoi(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--duration") == 0 && i + 1 < argc)
+        {
+            cfg.duration_sec = atoi(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--csv") == 0 && i + 1 < argc)
+        {
+            cfg.csv_path = argv[++i];
+        }
+        else if (strcmp(argv[i], "--workload") == 0 && i + 1 < argc)
+        {
+            cfg.workload = argv[++i];
+        }
+        else {
+            fprintf(stderr, "[loadgen] WARNING: unknown or incomplete argumnet %s\n", argv[i]);
+            return 1;
+        }
+    }
+
+    if (!cfg.url || cfg.rate <= 0 || cfg.threads <= 0 || cfg.duration_sec <= 0 || !cfg.csv_path)
+    {
+        fprintf(stderr, "[loadgen] ERROR: missing or invalid required arguments\n");
+        fprintf(stderr, "Usage: %s --url <url> --rate <rate> --thread <threads> --duration <seconds> --csv <file> [--workload <type>]\n", argv[0]);
         return 1;
     }
 
-    printf("[loadgen] Starting load test: %d requests/sec, %d threads, %d seconds\n", cfg.rate, cfg.threads, cfg.duration_sec);
+    printf("[loadgen] Starting load test: %d req/sec, %d threads, %d seconds, workload = %s\n", cfg.rate, cfg.threads, cfg.duration_sec, cfg.workload);
 
     int res = run_loadgen(&cfg);
 

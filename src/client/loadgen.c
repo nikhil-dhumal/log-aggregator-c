@@ -16,6 +16,7 @@ int run_loadgen(loadgen_config *cfg)
         workers[i].rate_per_thread = cfg->rate / cfg->threads;
         workers[i].duration_sec = cfg->duration_sec;
         workers[i].url = cfg->url;
+        workers[i].workload = cfg->workload;
     }
 
     for (int i = 0; i < cfg->threads; i++)
@@ -46,6 +47,8 @@ int run_loadgen(loadgen_config *cfg)
     long total_count = success_count + failure_count;
     double avg_response_time_us = (total_count > 0) ? (total_response_time_us / total_count) : 0.0;
     double avg_response_time_ms = avg_response_time_us / 1000.0;
+    double avg_throughput_rps = (double)success_count / cfg->duration_sec;
+    double failure_rate = (double)failure_count / (success_count + failure_count) * 100.0;
 
     FILE *csv = fopen(cfg->csv_path, "r");
     int write_header = 0;
@@ -69,10 +72,10 @@ int run_loadgen(loadgen_config *cfg)
 
     if (write_header)
     {
-        fprintf(csv, "success_count,failure_count,average_response_time_ms\n");
+        fprintf(csv, "workload,threads,rate,duration,success_count,failure_count,avg_response_time_ms,avg_throughput_rps,failure_rate\n");
     }
 
-    fprintf(csv, "%ld,%ld,%.3lf\n", success_count, failure_count, avg_response_time_ms);
+    fprintf(csv, "%s,%d,%d,%d,%ld,%ld,%.3lf,%.3lf,%.3lf\n", cfg->workload, cfg->threads, cfg->rate, cfg->duration_sec, success_count, failure_count, avg_response_time_ms, avg_throughput_rps, failure_rate);
     fclose(csv);
 
     free(threads);

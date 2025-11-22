@@ -14,6 +14,7 @@ typedef struct
     int rate_per_thread;
     int duration_sec;
     const char *url;
+    const char *workload;
 } worker_ctx;
 
 void *loadgen_worker(void *arg);
