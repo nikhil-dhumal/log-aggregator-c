@@ -6,12 +6,13 @@ typedef struct
     int success_count;
     int failure_count;
     long long total_response_time_us;
+    long long min_response_time_us;
+    long long max_response_time_us;
 } worker_metrics;
 
 typedef struct
 {
     int thread_id;
-    int rate_per_thread;
     int duration_sec;
     const char *url;
     const char *workload;

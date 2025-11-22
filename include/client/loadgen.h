@@ -3,7 +3,6 @@
 
 typedef struct
 {
-    int rate;
     int threads;
     int duration_sec;
     const char *url;
