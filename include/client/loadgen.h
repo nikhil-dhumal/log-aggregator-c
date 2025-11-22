@@ -8,6 +8,7 @@ typedef struct
     int duration_sec;
     const char *url;
     const char *csv_path;
+    const char *workload;
 } loadgen_config;
 
 int run_loadgen(loadgen_config *cfg);

@@ -65,6 +65,7 @@ int db_init_writer(void)
     {
         fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_write));
         PQfinish(pg_conn_write);
+        pg_conn_write = NULL;
         return -1;
     }
 
@@ -78,7 +79,7 @@ int db_write(log_entry *entries, int count)
         return 0;
     }
 
-    char query[32786];
+    char query[65536];
     int pos;
 
     pos = snprintf(query, sizeof(query), "INSERT INTO logs (timestamp, level, message) VALUES ");
@@ -88,27 +89,36 @@ int db_write(log_entry *entries, int count)
         char ts[32];
         snprintf(ts, sizeof(ts), "%ld", entries[i].timestamp);
 
-        char escaped_msg[600];
-        int msg_pos = 0;
+        char *escaped_msg = PQescapeLiteral(pg_conn_write, entries[i].message, strlen(entries[i].message));
+        char *escaped_level = PQescapeLiteral(pg_conn_write, entries[i].level, strlen(entries[i].level));
 
-        for (char *p = entries[i].message; *p && msg_pos < 590; p++)
+        if (!escaped_msg || !escaped_level)
         {
-            if (*p == '\'')
-            {
-                escaped_msg[msg_pos++] = '\'';
-            }
-            escaped_msg[msg_pos++] = *p;
+            fprintf(stderr, "[db] ERROR: Escaping failed\n");
+            if (escaped_msg)
+                PQfreemem(escaped_msg);
+            if (escaped_level)
+                PQfreemem(escaped_level);
+            return -1;
         }
-        escaped_msg[msg_pos] = '\0';
 
         pos += snprintf(
-            query + pos, 
-            sizeof(query) - pos, 
-            "(%s, '%s', '%s')%s", 
-            ts, 
-            entries[i].level, 
-            escaped_msg, 
+            query + pos,
+            sizeof(query) - pos,
+            "(%s, %s, %s)%s",
+            ts,
+            escaped_level,
+            escaped_msg,
             (i == count - 1) ? "" : ",");
+
+        PQfreemem(escaped_msg);
+        PQfreemem(escaped_level);
+
+        if (pos >= (int)sizeof(query) - 100)
+        {
+            fprintf(stderr, "[db] ERROR: Query too largs\n");
+            return -1;
+        }
     }
 
     PGresult *res = PQexec(pg_conn_write, query);
