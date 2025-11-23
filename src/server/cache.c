@@ -64,32 +64,30 @@ void cache_insert(log_entry *entry)
     pthread_rwlock_unlock(&lock);
 }
 
-int cache_get_last(int limit, const char *level, log_entry *buffer)
+int cache_get_range(int limit, int offset, const char *level, log_entry *buffer)
 {
     pthread_rwlock_rdlock(&lock);
-    if (count == 0)
+
+    if (count == 0 || offset >= count)
     {
         pthread_rwlock_unlock(&lock);
         return 0;
     }
+
     int matched = 0;
     int scanned = 0;
-    int index = (tail - 1 + capacity) % capacity;
-    if (limit > count)
-    {
-        limit = count;
-    }
-    while (matched < limit && scanned < count)
+    int index = (tail - 1 - offset + capacity) % capacity;
+
+    while (matched < limit && scanned < count - offset)
     {
         if (level == NULL || strcmp(level, cache[index].level) == 0)
         {
-            buffer[matched] = cache[index];
-            matched++;
+            buffer[matched++] = cache[index];
         }
         index = (index - 1 + capacity) % capacity;
         scanned++;
-
     }
+
     pthread_rwlock_unlock(&lock);
     return matched;
 }
