@@ -6,7 +6,6 @@
 #include "db.h"
 #include "log_entry.h"
 
-static PGconn *pg_conn_read = NULL;
 static PGconn *pg_conn_write = NULL;
 
 int db_init(void)
@@ -18,11 +17,11 @@ int db_init(void)
         return -1;
     }
 
-    pg_conn_read = PQconnectdb(conn_info);
-    if (PQstatus(pg_conn_read) != CONNECTION_OK)
+    PGconn *conn = PQconnectdb(conn_info);
+    if (PQstatus(conn) != CONNECTION_OK)
     {
-        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_read));
-        PQfinish(pg_conn_read);
+        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(conn));
+        PQfinish(conn);
         return -1;
     }
 
@@ -36,18 +35,21 @@ int db_init(void)
         "message VARCHAR(512) NOT NULL"
         ");";
 
-    PGresult *res = PQexec(pg_conn_read, create_table_query);
+    PGresult *res = PQexec(conn, create_table_query);
 
     if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
     {
-        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_read));
-        PQclear(res);
-        PQfinish(pg_conn_read);
-        pg_conn_read = NULL;
+        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(conn));
+        if (res)
+        {
+            PQclear(res);
+        }
+        PQfinish(conn);
         return -1;
     }
 
     PQclear(res);
+    PQfinish(conn);
     return 0;
 }
 
@@ -72,61 +74,30 @@ int db_init_writer(void)
     return 0;
 }
 
-int db_write(log_entry *entries, int count)
+int db_write(log_entry *entry)
 {
-    if (count <= 0)
-    {
-        return 0;
-    }
+    char ts[32];
+    snprintf(ts, sizeof(ts), "%ld", entry->timestamp);
 
-    char query[65536];
-    int pos;
+    const char *param_values[3] = {ts, entry->level, entry->message};
 
-    pos = snprintf(query, sizeof(query), "INSERT INTO logs (timestamp, level, message) VALUES ");
-
-    for (int i = 0; i < count; i++)
-    {
-        char ts[32];
-        snprintf(ts, sizeof(ts), "%ld", entries[i].timestamp);
-
-        char *escaped_msg = PQescapeLiteral(pg_conn_write, entries[i].message, strlen(entries[i].message));
-        char *escaped_level = PQescapeLiteral(pg_conn_write, entries[i].level, strlen(entries[i].level));
-
-        if (!escaped_msg || !escaped_level)
-        {
-            fprintf(stderr, "[db] ERROR: Escaping failed\n");
-            if (escaped_msg)
-                PQfreemem(escaped_msg);
-            if (escaped_level)
-                PQfreemem(escaped_level);
-            return -1;
-        }
-
-        pos += snprintf(
-            query + pos,
-            sizeof(query) - pos,
-            "(%s, %s, %s)%s",
-            ts,
-            escaped_level,
-            escaped_msg,
-            (i == count - 1) ? "" : ",");
-
-        PQfreemem(escaped_msg);
-        PQfreemem(escaped_level);
-
-        if (pos >= (int)sizeof(query) - 100)
-        {
-            fprintf(stderr, "[db] ERROR: Query too largs\n");
-            return -1;
-        }
-    }
-
-    PGresult *res = PQexec(pg_conn_write, query);
+    PGresult *res = PQexecParams(
+        pg_conn_write,
+        "INSERT INTO logs (timestamp, level, message) VALUES ($1, $2, $3)",
+        3,
+        NULL,
+        param_values,
+        NULL,
+        NULL,
+        0);
 
     if (!res || PQresultStatus(res) != PGRES_COMMAND_OK)
     {
         fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_write));
-        PQclear(res);
+        if (res) 
+        {
+            PQclear(res);
+        }
         return -1;
     }
 
@@ -134,11 +105,42 @@ int db_write(log_entry *entries, int count)
     return 0;
 }
 
+PGconn *db_get_connection(void)
+{
+    const char *conn_info = getenv("LOGDB_CONN");
+    if (!conn_info)
+    {
+        return NULL;
+    }
+
+    PGconn *conn = PQconnectdb(conn_info);
+    if (PQstatus(conn) != CONNECTION_OK)
+    {
+        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(conn));
+        PQfinish(conn);
+        return NULL;
+    }
+
+    return conn;
+}
+
 int db_read_range(int limit, int offset, const char *level, log_entry *buffer)
 {
-    char limit_str[6], offset_str[6];
+    if (limit <= 0 || offset < 0)
+    {
+        return 0;
+    }
+
+    char limit_str[16], offset_str[16];
     snprintf(limit_str, sizeof(limit_str), "%d", limit);
     snprintf(offset_str, sizeof(offset_str), "%d", offset);
+
+    PGconn *pg_conn_read = db_get_connection();
+
+    if (!pg_conn_read)
+    {
+        return -1;
+    }
 
     PGresult *res = NULL;
 
@@ -171,9 +173,12 @@ int db_read_range(int limit, int offset, const char *level, log_entry *buffer)
 
     if (!res || PQresultStatus(res) != PGRES_TUPLES_OK)
     {
-        fprintf(stderr, "[db] ERROR: %s\n", PQerrorMessage(pg_conn_read));
-        PQclear(res);
-        return 0;
+        fprintf(stderr, "[db] 1 ERROR: %s\n", PQerrorMessage(pg_conn_read));
+        if (res)
+        {
+            PQclear(res);
+        }
+        return -1;
     }
 
     int rows = PQntuples(res);
@@ -188,16 +193,12 @@ int db_read_range(int limit, int offset, const char *level, log_entry *buffer)
     }
 
     PQclear(res);
+    PQfinish(pg_conn_read);
     return rows;
 }
 
 void db_close(void)
 {
-    if (pg_conn_read)
-    {
-        PQfinish(pg_conn_read);
-        pg_conn_read = NULL;
-    }
     if (pg_conn_write)
     {
         PQfinish(pg_conn_write);
