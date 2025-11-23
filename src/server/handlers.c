@@ -24,7 +24,7 @@ int handle_post_log(struct mg_connection *conn, void *cbdata)
 {
     (void)cbdata;
     const struct mg_request_info *req = mg_get_request_info(conn);
-    
+
     long long len = req->content_length;
 
     if (len <= 0)
@@ -118,19 +118,30 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
     (void)cbdata;
     const struct mg_request_info *req = mg_get_request_info(conn);
 
+    int page = 0;
     int limit = DEFAULT_GET_LIMIT;
+    char page_str[16] = {0};
     char limit_str[16] = {0};
+
+    if (req->query_string != NULL && mg_get_var(req->query_string, strlen(req->query_string), "page", page_str, sizeof(page_str)) > 0)
+    {
+        page = atoi(page_str);
+        if (page < 0)
+        {
+            page = 0;
+        }
+    }
 
     if (req->query_string != NULL && mg_get_var(req->query_string, strlen(req->query_string), "limit", limit_str, sizeof(limit_str)) > 0)
     {
         limit = atoi(limit_str);
-        if (limit <= 0)
+        if (limit < 0)
         {
             limit = DEFAULT_GET_LIMIT;
         }
-        if (limit > 1000)
+        if (limit > PAGE_SIZE)
         {
-            limit = 1000;
+            limit = PAGE_SIZE;
         }
     }
 
@@ -140,10 +151,6 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
     if (req->query_string != NULL && mg_get_var(req->query_string, strlen(req->query_string), "level", level_buf, sizeof(level_buf)) > 0)
     {
         level = level_buf;
-    }
-
-    if (level)
-    {
         for (char *p = level; *p; p++)
         {
             *p = toupper(*p);
@@ -162,14 +169,23 @@ int handle_get_logs(struct mg_connection *conn, void *cbdata)
         return 500;
     }
 
-    int got_from_cache = cache_get_last(limit, level, logs);
-    int total = got_from_cache;
+    int total = 0;
 
-    if (got_from_cache < limit)
+    if (page <= PAGES_IN_CACHE)
     {
-        int need = limit - got_from_cache;
-        int got_from_db = db_read_range(need, got_from_cache, level, logs + got_from_cache);
-        total += got_from_db;
+        int got_from_cache = cache_get_range(limit, page * PAGE_SIZE, level, logs);
+        total = got_from_cache;
+
+        if (got_from_cache < limit)
+        {
+            int need = limit - got_from_cache;
+            int got_from_db = db_read_range(need, got_from_cache, level, logs + got_from_cache);
+            total += got_from_db;
+        }
+    }
+    else
+    {
+        total = db_read_range(limit, page * PAGE_SIZE, level, logs);
     }
 
     cJSON *root = cJSON_CreateObject();

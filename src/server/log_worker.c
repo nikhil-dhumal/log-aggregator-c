@@ -14,40 +14,19 @@ static pthread_t worker_thread;
 
 static atomic_int worker_running = 1;
 
-long long now_ms()
-{
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return (ts.tv_sec * 1000LL) + (ts.tv_nsec / 1000000);
-}
-
 static void *worker_loop(void *arg)
 {
     (void)arg;
-
-    int count = 0;
-    log_entry entires[WRITE_BATCH_SIZE];
-    long long batch_start = now_ms();
 
     while (worker_running)
     {
         log_entry entry;
         if (queue_pop(&entry) != 0)
         {
-            if (count > 0) {
-                db_write(entires, count);
-            }
             break;
         }
-        long long now = now_ms();
-        entires[count++] = entry;
         cache_insert(&entry);
-        if (count == WRITE_BATCH_SIZE || now - batch_start >= 100)
-        {
-            db_write(entires, count);
-            count = 0;
-            batch_start = now_ms();
-        }
+        db_write(&entry);
     }
 
     return NULL;
