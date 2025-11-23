@@ -56,7 +56,7 @@ int send_get_request(CURL *curl, const char *url)
 {
     int idx = rand() % logs_table_size;
     int limit = 1 + rand() % 100;
-    int page = 2 + rand() % 10000;
+    int page = 1 + rand() % 10;
     char get_url[512];
     int n = snprintf(get_url, sizeof(get_url), "%s?limit=%d&level=%s&page=%d", url, limit, logs_table[idx].level, page);
 
