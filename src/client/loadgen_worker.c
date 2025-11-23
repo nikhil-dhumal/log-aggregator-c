@@ -45,7 +45,6 @@ int send_post_request(CURL *curl, const char *url)
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, discard_response);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 5000L);
 
     CURLcode res = curl_easy_perform(curl);
@@ -57,8 +56,9 @@ int send_get_request(CURL *curl, const char *url)
 {
     int idx = rand() % logs_table_size;
     int limit = 1 + rand() % 100;
+    int page = 2 + rand() % 10;
     char get_url[512];
-    int n = snprintf(get_url, sizeof(get_url), "%s?limit=%d&level=%s", url, limit, logs_table[idx].level);
+    int n = snprintf(get_url, sizeof(get_url), "%s?limit=%d&level=%s&page=%d", url, limit, logs_table[idx].level, page);
 
     if (n < 0 || n >= (int)sizeof(get_url))
     {
@@ -67,7 +67,6 @@ int send_get_request(CURL *curl, const char *url)
 
     curl_easy_setopt(curl, CURLOPT_URL, get_url);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, discard_response);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 5000L);
 
     CURLcode res = curl_easy_perform(curl);
@@ -108,6 +107,7 @@ void *loadgen_worker(void *args)
     }
 
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, discard_response);
 
     while (now_us() < end_us)
     {
