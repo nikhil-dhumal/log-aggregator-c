@@ -127,9 +127,79 @@ curl http://localhost:8080/logs?limit=10
 
 The workload type determines the **ratio of POST (write) vs GET (read) requests** each thread generates:
 
-- `write-heavy` : 80% POST (log ingestion), 20% GET (log querying)  
-- `read-heavy` : 80% GET, 20% POST  
+- `write-heavy` : 100% POST (log ingestion)  
+- `read-heavy` : 80% GET (log querying), 20% POST  
 - `mixed` : 50% POST, 50% GET  
+
+## Load Testing & Core Isolation Setup (Important for Correct Metrics)
+
+To correctly identify **CPU bottlenecks** and **disk bottlenecks**, the
+client, server, and database must run on **dedicated CPU cores**:
+
+-   **PostgreSQL** → Core **3**
+-   **Application Server** → Core **2**
+-   **Load Generator** → Cores **0 and 1**
+
+This ensures no CPU contention and allows accurate measurement of system
+performance.
+
+------------------------------------------------------------------------
+
+### 1. Pin PostgreSQL to Core 3
+
+**Stop the default PostgreSQL cluster:**
+
+``` bash
+sudo pg_ctlcluster 16 main stop
+```
+
+**Restart PostgreSQL on core 3:**
+
+``` bash
+sudo taskset -c 3 su - postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main -o '-c config_file=/etc/postgresql/16/main/postgresql.conf' -l /var/log/postgresql/postgresql-16-main.log start"
+```
+
+------------------------------------------------------------------------
+
+### 2. Run Application Server on Core 2
+
+``` bash
+taskset -c 2 ./log_server
+```
+
+------------------------------------------------------------------------
+
+### 3. Run Load Generator on Cores 0 and 1
+
+**Example:**
+
+``` bash
+taskset -c 0,1 ./loadgen_client   --url http://localhost:8080/logs   --threads 10   --rate 100   --duration 60   --csv output.csv   --workload mixed
+```
+
+After the test completes, performance metrics will be saved in the CSV
+file you provided (e.g., `output.csv`).
+
+------------------------------------------------------------------------
+
+## Monitoring CPU and Disk Utilization
+
+### CPU Utilization (per core)
+
+``` bash
+mpstat -P ALL 1
+```
+
+### Disk Utilization
+
+``` bash
+iostat -x 1
+```
+
+These measurements help identify:
+
+-   **CPU bottlenecks** → seen in **read-heavy** workloads
+-   **Disk bottlenecks** → seen in **write-heavy** workloads
 
 ## Author
 **Nikhil Rajendra Dhumal**  
