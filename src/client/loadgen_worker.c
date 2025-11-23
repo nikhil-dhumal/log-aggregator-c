@@ -118,7 +118,7 @@ void *loadgen_worker(void *args)
 
         if (strcmp(ctx->workload, "write-heavy") == 0)
         {
-            res = (r < 0.8) ? send_post_request(curl, ctx->url) : send_get_request(curl, ctx->url);
+            send_post_request(curl, ctx->url);
         }
         else if (strcmp(ctx->workload, "read-heavy") == 0)
         {
