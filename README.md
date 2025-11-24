@@ -172,7 +172,7 @@ taskset -c 2 ./log_server
 **Example:**
 
 ``` bash
-taskset -c 0,1 ./loadgen_client   --url http://localhost:8080/logs   --threads 10 --duration 60   --csv output.csv   --workload mixed
+taskset -c 0,1 ./loadgen_client --url http://localhost:8080/logs --threads 10 --duration 60 --csv output.csv --workload mixed
 ```
 
 After the test completes, performance metrics will be saved in the CSV
