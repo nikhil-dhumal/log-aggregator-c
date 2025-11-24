@@ -100,7 +100,6 @@ curl http://localhost:8080/logs?limit=10
 ```bash
 ./loadgen \
   --url http://localhost:8080/logs \
-  --rate 100 \
   --threads 10 \
   --duration 30 \
   --csv results.csv \
@@ -117,7 +116,6 @@ curl http://localhost:8080/logs?limit=10
 #### Command-line Flags
 
 - `--url <server_url>` : **Required**. The base URL of the log aggregator server (e.g., `http://localhost:8080/logs`).
-- `--rate <requests_per_second>` : **Required**. Number of requests **per second per thread**.
 - `--threads <number_of_threads>` : **Required**. Number of concurrent worker threads generating load.
 - `--duration <seconds>` : **Required**. Total duration of the test in seconds.
 - `--csv <output_csv_file>` : **Required**. Path to save the CSV metrics output.
@@ -174,7 +172,7 @@ taskset -c 2 ./log_server
 **Example:**
 
 ``` bash
-taskset -c 0,1 ./loadgen_client   --url http://localhost:8080/logs   --threads 10   --rate 100   --duration 60   --csv output.csv   --workload mixed
+taskset -c 0,1 ./loadgen_client   --url http://localhost:8080/logs   --threads 10 --duration 60   --csv output.csv   --workload mixed
 ```
 
 After the test completes, performance metrics will be saved in the CSV
