@@ -3,7 +3,7 @@
 A multi-tier HTTP-based log aggregation and query system implemented in C.
 
 ## Overview
-This project is part of **CS744: Design and Engineering of Computer Systems (Autumn 2025, IIT Bombay)**.  
+This project is part of **CS744: Design and Engineering of Computing Systems (Autumn 2025, IIT Bombay)**.  
 It implements a multi-tier log aggregation system in C that collects logs from multiple clients, stores them in PostgreSQL, and provides fast access to recent logs via an in-memory cache.  
 The system also includes a custom load generator to simulate different workloads and measure system performance.  
 
